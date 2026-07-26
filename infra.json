@@ -1,0 +1,144 @@
+ {
+    "Parameters" : {
+        "cidrblk" : {
+        "Description": "enter the cidr value",
+        "Type" : "String",
+        "Default" : "11.0.0.0/23",
+        "AllowedValues":["11.0.0.0/23","12.0.0.0/23"]
+        },
+        "Sub1blk" : {
+        "Description": "enter the subnet1 value",
+        "Type": "String",
+        "Default": ""
+        },
+        "imgId" : {
+        "Description": "choose the image",
+        "Type": "String",
+        "Default": "ami-01a00762f46d584a1",
+        "AllowedValues": ["ami-01a00762f46d584a1","ami-006f82a1d5a27da54"]
+        },
+        "Instype" : {
+        "Description": "choose the instance",
+        "Type": "String",
+        "AllowedValues": ["t3.micro","t3.small"]
+        },
+        "mykeypair" : {
+        "Description": "choose the key",
+        "Type": "AWS::EC2::KeyPair::KeyName",
+        "AllowedValues": ["ubuntu","linux"]
+        }
+    },
+    "Resources": {
+       "myVPC" : {
+           "Type" : "AWS::EC2::VPC",
+           "Properties" : {
+               "CidrBlock" : {"Ref" : "cidrblk"},
+               "Tags" : [ 
+                   {"Key" : "Name", "Value" : "myvpc"} 
+               ]
+           }
+       },
+       "mySubnet1" : {
+            "Type" : "AWS::EC2::Subnet",
+            "Properties" : {
+                "VpcId" : { "Ref" : "myVPC" },
+                "CidrBlock" : {"Ref":"Sub1blk"},
+                "AvailabilityZone" : "ap-south-1a",
+                "MapPublicIpOnLaunch": true,
+                "Tags" : [ { "Key" : "Name", "Value" : "subnet1" } ]
+            }
+        },
+        "myRouteTable1" : {
+            "Type" : "AWS::EC2::RouteTable",
+            "Properties" : {
+                "VpcId" : { "Ref" : "myVPC" },
+                "Tags" : [ { "Key" : "Name", "Value" : "route1" } ]
+            }
+        },      
+        "mySubnetRouteTableAssociation" : {
+            "Type" : "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties" : {
+                "SubnetId" : { "Ref" : "mySubnet1" },
+                "RouteTableId" : { "Ref" : "myRouteTable1" }
+            }
+        },
+        "myInternetGateway" : {
+            "Type" : "AWS::EC2::InternetGateway",
+            "Properties" : {
+                "Tags" : [ {"Key" : "Name", "Value" : "my-igw"}]
+            }
+        },
+        "AttachGateway" : {
+            "Type" : "AWS::EC2::VPCGatewayAttachment",
+            "Properties" : {
+                "VpcId" : { "Ref" : "myVPC" },
+                "InternetGatewayId" : { "Ref" : "myInternetGateway" }
+            }
+        },            
+        "myRoute" : {
+            "Type" : "AWS::EC2::Route",
+            "DependsOn" : "AttachGateway",
+            "Properties" : {
+                "RouteTableId" : { "Ref" :"myRouteTable1"},
+                "DestinationCidrBlock" : "0.0.0.0/0",
+                "GatewayId" : { "Ref" : "myInternetGateway" }
+            }
+        },
+        "Mysecuritygroup" : {
+            "Type" : "AWS::EC2::SecurityGroup",
+            "Properties" : {
+                "GroupDescription" : "Allow http and ssh",
+                "GroupName" : "defaultt",
+                "VpcId" : {"Ref" : "myVPC"},
+                "SecurityGroupIngress" : [{
+                    "IpProtocol" : "tcp",
+                    "FromPort" : 80,
+                    "ToPort" : 80,
+                    "CidrIp" : "0.0.0.0/0"
+                },
+                {
+                    "IpProtocol" : "tcp",
+                    "FromPort" : 22,
+                    "ToPort" : 22,
+                    "CidrIp" : "0.0.0.0/0"
+                }],
+                "SecurityGroupEgress" : [{
+                    "IpProtocol" : "-1",
+                    "FromPort": 0,
+                    "ToPort": 65535,
+                    "CidrIp" : "0.0.0.0/0"
+                }]
+            }
+        },
+        "myInstance": {
+            "Type": "AWS::EC2::Instance",
+            "Properties": {
+                "ImageId": {"Ref" : "imgId"},
+                "SubnetId" : {"Ref":"mySubnet1"},
+                "InstanceType": {"Ref" : "Instype"},
+                "KeyName": {"Ref" : "mykeypair"},
+                "SecurityGroupIds": [
+                    {"Ref": "Mysecuritygroup"}
+                ],
+                "UserData": {
+                    "Fn::Base64": {"Fn::Sub": "#!/bin/bash\nsudo su\napt update -y\napt install apache2 -y\ncd /var/www/html\nrm -f index.html\necho \"<h1>Hello from Ubuntu EC2</h1>\" > index.html\nsystemctl start apache2\nsystemctl enable apache2\n"}
+                }
+            }
+        }
+    },
+    "Outputs" : {
+        "vpcoutput" : {
+        "Description" : "Vpc successfully created.",
+        "Value" : {"Ref" :"myVPC"}
+        },
+        "sub1out" : {
+        "Description" : "Vpc successfully created.",
+        "Value" : {"Ref" : "mySubnet1"}
+        },
+        "instanceout" : {
+        "Description" : "Instance created successfully.",
+        "Value" : {"Ref" : "myInstance"}
+        }
+    }
+}
+
